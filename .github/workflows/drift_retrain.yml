@@ -32,9 +32,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install "mlflow>=2.11.1" "evidently>=0.4.22" \
-            "pandas>=2.2.1" "numpy>=1.26.4" "psycopg2-binary>=2.9.9" \
-            "scikit-learn>=1.4.1"
+          pip install "mlflow>=3.13.0" "evidently>=0.4.22" \
+            "pandas>=2.2.2" "numpy>=2.0" "psycopg2-binary>=2.9.9" \
+            "scikit-learn>=1.9.0"
 
       - name: Run drift check
         id: drift

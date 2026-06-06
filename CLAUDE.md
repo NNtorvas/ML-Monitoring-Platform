@@ -8,7 +8,7 @@ Portfolio MLOps project demonstrating the full model lifecycle: training → ser
 
 | Layer | Tool | Version |
 |---|---|---|
-| Model | scikit-learn RandomForest | 1.4.1.post1 |
+| Model | scikit-learn RandomForest | 1.9.0+ |
 | Tracking | MLflow | 3.13.0 |
 | Serving | FastAPI + uvicorn | 0.110.0 |
 | Drift detection | Evidently AI | 0.4.22 |
@@ -44,7 +44,6 @@ scripts/check_version_bump.py ← pre-push local version gate
 .github/workflows/_prep.yml         ← reusable: validate semver + git tag
 .github/workflows/_build-push.yml   ← reusable: parallel api + dashboard → GHCR
 README.md                  ← recruiter-facing documentation
-docs/OVERVIEW.md           ← plain-English guide: what it does, technologies, example
 docs/DEEP_DIVE.md          ← full technical study guide
 ```
 

@@ -306,12 +306,16 @@ mlflow:
   command: >
     mlflow server
     --backend-store-uri postgresql://mluser:mlpassword@postgres/mlmonitoring
-    --default-artifact-root /mlflow/artifacts
+    --artifacts-destination /mlflow/artifacts
+    --serve-artifacts
+    --host 0.0.0.0
+    --port 5000
+    --allowed-hosts '*'
 ```
 
 Two storage layers:
 - **`--backend-store-uri`**: Where run metadata (params, metrics) is stored. We use PostgreSQL — the same instance as the prediction logs, just different tables. Alternative: SQLite file (simpler but not concurrent-safe).
-- **`--default-artifact-root`**: Where binary artifacts (the model pickle, json files) are stored. We use a Docker volume (`mlflow-artifacts:/mlflow/artifacts`). Alternative: S3 bucket, GCS bucket — required for multi-machine deployments.
+- **`--artifacts-destination`**: Where binary artifacts (the model pickle, json files) are stored. We use a Docker volume (`mlflow-artifacts:/mlflow/artifacts`). Alternative: S3 bucket, GCS bucket — required for multi-machine deployments. The `--serve-artifacts` flag proxies artifact downloads through the tracking server (required when clients can't reach the artifact store directly). The `--allowed-hosts '*'` flag permits requests from Docker-internal hostnames (e.g. `mlflow:5000`).
 
 ---
 
