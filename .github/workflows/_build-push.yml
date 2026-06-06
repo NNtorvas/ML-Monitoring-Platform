@@ -1,0 +1,122 @@
+name: _build-push
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+    outputs:
+      api_image:
+        description: "Fully qualified api image (tag=version)"
+        value: ${{ jobs.build-api.outputs.api_image }}
+      dashboard_image:
+        description: "Fully qualified dashboard image (tag=version)"
+        value: ${{ jobs.build-dashboard.outputs.dashboard_image }}
+
+jobs:
+  build-api:
+    name: Build & push API
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      api_image: ${{ steps.refs.outputs.api }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Set versioned image references
+        id: refs
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          BASE="ghcr.io/${OWNER}/ml-monitoring-platform"
+          echo "api=${BASE}-api:${{ inputs.version }}" >> $GITHUB_OUTPUT
+          echo "api_cache=${BASE}-api:buildcache" >> $GITHUB_OUTPUT
+          echo "owner_lc=${OWNER}" >> $GITHUB_OUTPUT
+
+      - name: API — extract metadata
+        id: meta-api
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ steps.refs.outputs.owner_lc }}/ml-monitoring-platform-api
+          tags: |
+            type=raw,value=${{ inputs.version }}
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: API — build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: ./api
+          file: api/Dockerfile
+          push: true
+          tags: ${{ steps.meta-api.outputs.tags }}
+          labels: ${{ steps.meta-api.outputs.labels }}
+          provenance: false
+          cache-from: type=registry,ref=${{ steps.refs.outputs.api_cache }}
+          cache-to: type=registry,ref=${{ steps.refs.outputs.api_cache }},mode=max,image-manifest=true,oci-mediatypes=true
+
+  build-dashboard:
+    name: Build & push Dashboard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      dashboard_image: ${{ steps.refs.outputs.dashboard }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Set versioned image references
+        id: refs
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          BASE="ghcr.io/${OWNER}/ml-monitoring-platform"
+          echo "dashboard=${BASE}-dashboard:${{ inputs.version }}" >> $GITHUB_OUTPUT
+          echo "dashboard_cache=${BASE}-dashboard:buildcache" >> $GITHUB_OUTPUT
+          echo "owner_lc=${OWNER}" >> $GITHUB_OUTPUT
+
+      - name: Dashboard — extract metadata
+        id: meta-dashboard
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ steps.refs.outputs.owner_lc }}/ml-monitoring-platform-dashboard
+          tags: |
+            type=raw,value=${{ inputs.version }}
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Dashboard — build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: ./dashboard
+          file: dashboard/Dockerfile
+          push: true
+          tags: ${{ steps.meta-dashboard.outputs.tags }}
+          labels: ${{ steps.meta-dashboard.outputs.labels }}
+          provenance: false
+          cache-from: type=registry,ref=${{ steps.refs.outputs.dashboard_cache }}
+          cache-to: type=registry,ref=${{ steps.refs.outputs.dashboard_cache }},mode=max,image-manifest=true,oci-mediatypes=true

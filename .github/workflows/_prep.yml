@@ -1,0 +1,52 @@
+name: _prep
+
+on:
+  workflow_call:
+    outputs:
+      version:
+        description: "Semantic version extracted from __version__.py"
+        value: ${{ jobs.validate-and-tag.outputs.version }}
+
+jobs:
+  validate-and-tag:
+    name: Validate version & create tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from __version__.py
+        id: extract
+        run: |
+          VERSION=$(python -c "exec(open('__version__.py').read()); print(__version__)")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Validate semver bump against latest tag
+        run: |
+          CURR="${{ steps.extract.outputs.version }}"
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          PREV="${PREV_TAG#v}"
+          python -c "
+          import sys
+          curr = tuple(int(x) for x in '${CURR}'.split('.'))
+          prev = tuple(int(x) for x in '${PREV}'.split('.'))
+          if curr <= prev:
+              print(f'[version-gate] FAIL: bump __version__.py before pushing. latest={\".\".join(map(str,prev))} current={\".\".join(map(str,curr))}')
+              sys.exit(1)
+          print(f'[version-gate] OK: {\".\".join(map(str,prev))} -> {\".\".join(map(str,curr))}')
+          "
+
+      - name: Create annotated git tag on last non-merge commit
+        run: |
+          VERSION="${{ steps.extract.outputs.version }}"
+          COMMIT=$(git rev-list --max-count=1 --no-merges HEAD)
+          git config user.name "GitHub Actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git tag -a "v${VERSION}" "${COMMIT}" -m "Release v${VERSION}"
+          git push origin "v${VERSION}"

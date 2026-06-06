@@ -1,0 +1,73 @@
+name: Drift Check & Auto-Retrain
+
+on:
+  schedule:
+    - cron: "0 6 * * *"   # 06:00 UTC daily
+  workflow_dispatch:        # allow manual trigger
+
+env:
+  MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+  MLFLOW_MODEL_NAME: breast-cancer-model
+  MLFLOW_EXPERIMENT_NAME: breast-cancer-classifier
+  POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+  POSTGRES_PORT: "5432"
+  POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+  POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+  POSTGRES_DB: mlmonitoring
+
+jobs:
+  drift-check:
+    name: Run Drift Detection
+    runs-on: ubuntu-latest
+    outputs:
+      drift_detected: ${{ steps.drift.outputs.drift_detected }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install "mlflow>=2.11.1" "evidently>=0.4.22" \
+            "pandas>=2.2.1" "numpy>=1.26.4" "psycopg2-binary>=2.9.9" \
+            "scikit-learn>=1.4.1"
+
+      - name: Run drift check
+        id: drift
+        run: |
+          python monitoring/drift_report.py
+          DRIFT_EXIT=$?
+          if [ $DRIFT_EXIT -eq 1 ]; then
+            echo "drift_detected=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "drift_detected=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  retrain:
+    name: Retrain & Register Model
+    needs: drift-check
+    if: needs.drift-check.outputs.drift_detected == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install training dependencies
+        run: pip install -r training/requirements.txt
+
+      - name: Retrain model
+        run: python training/train.py
+
+      - name: Notify
+        run: |
+          echo "Retraining complete. A new model version has been registered in MLflow."
+          echo "Check $MLFLOW_TRACKING_URI/#/models/$MLFLOW_MODEL_NAME for the new version."

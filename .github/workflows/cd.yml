@@ -1,0 +1,22 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    uses: ./.github/workflows/_prep.yml
+    permissions:
+      contents: write
+
+  build-push:
+    needs: prepare
+    uses: ./.github/workflows/_build-push.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
