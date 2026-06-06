@@ -1,22 +1,35 @@
-# Python
+# ── Python ─────────────────────────────────────────────────────────────────────
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.egg-info/
-.pytest_cache/
 dist/
 build/
 
-# Virtual environment
+# ── Testing & coverage ─────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# ── Virtual environment ─────────────────────────────────────────────────────────
 .venv/
 venv/
 
-# Environment / secrets
+# ── Environment / secrets ──────────────────────────────────────────────────────
 .env
+.env.*
 
-# IDE
+# ── IDE ────────────────────────────────────────────────────────────────────────
 .idea/
 .vscode/
 
-# Generated training artifacts
+# ── MLflow ─────────────────────────────────────────────────────────────────────
+mlruns/
+mlartifacts/
+
+# ── Docker ─────────────────────────────────────────────────────────────────────
+postgres_data/
+
+# ── Generated training artifacts ───────────────────────────────────────────────
 training_stats.json
