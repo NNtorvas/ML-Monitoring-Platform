@@ -2,7 +2,7 @@
 
 ## Project Purpose
 
-Portfolio MLOps project demonstrating the full model lifecycle: training → serving → monitoring → automated retraining. Target audience: ML engineering recruiters. Keep everything clean and completable — no over-engineering.
+MLOps platform demonstrating the full model lifecycle: training → serving → monitoring → automated retraining.
 
 ## Stack
 
@@ -43,7 +43,7 @@ scripts/check_version_bump.py ← pre-push local version gate
 .github/workflows/cd.yml            ← CD: push to main → tag + push images
 .github/workflows/_prep.yml         ← reusable: validate semver + git tag
 .github/workflows/_build-push.yml   ← reusable: parallel api + dashboard → GHCR
-README.md                  ← recruiter-facing documentation
+README.md                  ← project documentation
 docs/DEEP_DIVE.md          ← full technical study guide
 ```
 

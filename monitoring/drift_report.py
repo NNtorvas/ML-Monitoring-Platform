@@ -15,8 +15,13 @@ import mlflow
 import pandas as pd
 import psycopg2
 import psycopg2.extras
-from evidently.report import Report
-from evidently.metric_preset import DataDriftPreset
+
+try:
+    from evidently.report import Report
+    from evidently.metric_preset import DataDriftPreset
+except ImportError:
+    from evidently.legacy.report import Report  # type: ignore[no-redef]
+    from evidently.legacy.metric_preset import DataDriftPreset  # type: ignore[no-redef]
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

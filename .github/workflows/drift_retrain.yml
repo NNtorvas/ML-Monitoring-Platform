@@ -39,13 +39,9 @@ jobs:
       - name: Run drift check
         id: drift
         run: |
-          python monitoring/drift_report.py
-          DRIFT_EXIT=$?
-          if [ $DRIFT_EXIT -eq 1 ]; then
-            echo "drift_detected=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "drift_detected=false" >> "$GITHUB_OUTPUT"
-          fi
+          python monitoring/drift_report.py \
+            && echo "drift_detected=false" >> "$GITHUB_OUTPUT" \
+            || echo "drift_detected=true" >> "$GITHUB_OUTPUT"
 
   retrain:
     name: Retrain & Register Model

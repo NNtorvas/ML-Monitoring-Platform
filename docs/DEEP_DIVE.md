@@ -16,7 +16,7 @@ A complete technical breakdown of every design decision, alternative considered,
 8. [Component 5: Evidently — Drift Detection (`monitoring/drift_report.py`)](#8-component-5-evidently--drift-detection)
 9. [Component 6: Airflow DAG (`dags/drift_detection_dag.py`)](#9-component-6-airflow-dag)
 10. [Component 7: Streamlit Dashboard (`dashboard/app.py`)](#10-component-7-streamlit-dashboard)
-11. [Component 8: GitHub Actions CI (`drift_retrain.yml`)](#11-component-8-github-actions-ci)
+11. [Component 8: GitHub Actions Workflows](#11-component-8-github-actions-workflows)
 12. [Component 9: Docker Compose](#12-component-9-docker-compose)
 13. [Cross-Cutting Design Decisions](#13-cross-cutting-design-decisions)
 14. [What Could Go Wrong in Production](#14-what-could-go-wrong-in-production)
@@ -176,7 +176,7 @@ pipeline = Pipeline([
 | **RandomForest** | Handles feature scaling internally (via splits), interpretable feature importance, robust to outliers | Slower inference than linear models | **Chosen** — good accuracy + `predict_proba` gives calibrated confidence |
 | Logistic Regression | Very fast, interpretable coefficients | Requires linear separability | Simpler, but less representative of real MLOps |
 | SVM | Good with high-dimensional data | No native probability output (needs `CalibratedClassifierCV`) | Complicates the confidence scoring |
-| XGBoost | Often best accuracy | External dependency, more config | Overkill for a demo dataset |
+| XGBoost | Often best accuracy | External dependency, more config | Additional dependency for marginal gain on this dataset |
 | Neural Net | Flexible | Needs more data, harder to explain | Wrong tool for tabular data at this scale |
 
 RandomForest wins here because the point is **infrastructure correctness**, not model accuracy. RF gives `predict_proba` natively, handles the feature scale itself inside the Pipeline (though we add a StandardScaler anyway to demonstrate the pattern), and produces reasonable accuracy (~96%) without tuning.
@@ -285,7 +285,7 @@ Model Registry: "breast-cancer-model"
 | DVC | Git-native versioning, works with any storage | More complex setup, no built-in registry |
 | SageMaker Experiments | AWS-native | Vendor lock-in |
 
-MLflow wins for self-hosted portfolio projects because it runs in Docker with zero external dependencies and has first-class sklearn integration via `mlflow.sklearn.log_model()`.
+MLflow wins for self-hosted deployments because it runs in Docker with zero external dependencies and has first-class sklearn integration via `mlflow.sklearn.log_model()`.
 
 ### How `models:/breast-cancer-model/latest` works
 
@@ -297,7 +297,7 @@ When the API calls `mlflow.sklearn.load_model("models:/breast-cancer-model/lates
 5. Downloads the artifact to a temp directory
 6. Unpickles the sklearn Pipeline
 
-**Stage aliases**: MLflow also supports `models:/name/Production` and `models:/name/Staging`. You'd set these via the UI or `client.transition_model_version_stage()`. We use `latest` to keep the demo simple — in production you'd promote to `Production` stage explicitly.
+**Stage aliases**: MLflow also supports `models:/name/Production` and `models:/name/Staging`. You'd set these via the UI or `client.transition_model_version_stage()`. We use `latest` here — in production you'd promote to `Production` stage explicitly.
 
 ### MLflow backend configuration
 
@@ -349,7 +349,7 @@ async def load_model():
 This loads eagerly but after the container is running, so it doesn't crash Docker. The API would return 500s until the model is loaded. Better UX for health checks but same race condition problem.
 
 **What we chose — true lazy loading:**
-First `/predict` call triggers the load. The `/health` endpoint always works, even before the model exists. The trade-off: the first prediction is slow (model download). Acceptable for a demo; unacceptable for latency-sensitive production (where you'd use `startup` + retry logic).
+First `/predict` call triggers the load. The `/health` endpoint always works, even before the model exists. The trade-off: the first prediction is slow (model download). For latency-sensitive production you'd use `startup` + retry logic instead.
 
 ### Request validation with Pydantic
 
@@ -504,7 +504,7 @@ PostgreSQL
 └── database: airflow       ← Airflow metadata (DAG runs, task states, variables)
 ```
 
-Alternative: run two separate PostgreSQL containers. That's cleaner isolation but doubles the container count and resource usage. Since both databases are low-traffic for a demo, sharing a PostgreSQL instance is fine.
+Alternative: run two separate PostgreSQL containers. That's cleaner isolation but doubles the container count and resource usage. Since both databases are low-traffic, sharing a PostgreSQL instance is a reasonable trade-off.
 
 The init script trick:
 ```sql
@@ -580,12 +580,12 @@ UNIX convention: exit code 0 = success, non-zero = failure. GitHub Actions treat
 - name: Run drift check
   id: drift
   run: |
-    python monitoring/drift_report.py
-    DRIFT_EXIT=$?
-    if [ $DRIFT_EXIT -eq 1 ]; then
-      echo "drift_detected=true" >> "$GITHUB_OUTPUT"
-    fi
+    python monitoring/drift_report.py \
+      && echo "drift_detected=false" >> "$GITHUB_OUTPUT" \
+      || echo "drift_detected=true" >> "$GITHUB_OUTPUT"
 ```
+
+The `&&`/`||` chain handles exit codes correctly: if the script exits 0 (no drift), the `&&` branch runs; if it exits 1 (drift detected), the `||` branch runs. An intermediate `DRIFT_EXIT=$?` variable doesn't work here because `set -e` (the GitHub Actions default) exits the shell the moment any command returns non-zero — before the variable assignment can capture it.
 
 This is a clean, shell-native way to communicate binary state between a Python script and a CI system.
 
@@ -669,7 +669,7 @@ For a single daily task, cron is simpler. For any workflow with 2+ steps or that
 | Dash (Plotly) | More interactive than Streamlit, still Python | More boilerplate than Streamlit |
 | Metabase | SQL-driven BI tool | Not code-first, separate infra |
 
-Streamlit wins for portfolio demos: a recruiter can see a working dashboard from 50 lines of Python.
+Streamlit wins for operational dashboards that need to ship quickly: a working dashboard in 50 lines of Python.
 
 ### The caching pattern
 
@@ -696,9 +696,21 @@ Why Plotly over Streamlit's built-in `st.bar_chart()`?
 
 ---
 
-## 11. Component 8: GitHub Actions CI
+## 11. Component 8: GitHub Actions Workflows
 
-**File**: `.github/workflows/drift_retrain.yml`
+### CI (`ci.yml`)
+
+Runs on every push and pull request. Installs the full dependency set (`training/requirements.txt` + `api/requirements.txt` + `requirements-dev.txt`) and runs `pytest tests/ -v`.
+
+The test suite covers:
+- API endpoint behavior: label mapping, feature count validation, DB fail-safe (prediction returned even when PostgreSQL is down), model lazy-loading and caching
+- Drift module: JSONB row unpacking, Gaussian reference shape, empty data early return, drift boolean extraction
+
+All tests use mocks — no Docker, no real MLflow or PostgreSQL required. This keeps CI fast (~30 seconds) and eliminates external dependencies.
+
+### Drift & retrain (`drift_retrain.yml`)
+
+Runs on a daily cron at 06:00 UTC and can be triggered manually.
 
 ### The conditional job pattern
 
@@ -910,7 +922,7 @@ Our Airflow setup (LocalExecutor, single webserver+scheduler container) has no f
 
 ### Secrets in `.env`
 
-The `.env` file contains real passwords. It's committed to the repo by default. Add `.env` to `.gitignore` and provide a `.env.example` with placeholder values.
+The `.env` file contains real passwords and is listed in `.gitignore` — it will never be committed. If you add a new environment variable, document it in `.env.example` (placeholder values only) so other developers know what to populate.
 
 ---
 

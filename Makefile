@@ -12,7 +12,7 @@ SRC           := training monitoring api dashboard
 .PHONY: help install hooks \
         up down build logs \
         train drift \
-        format lint check \
+        format lint check test \
         version clean
 
 # ── Help ───────────────────────────────────────────────────────────────────────
@@ -21,10 +21,10 @@ help: ## Show available targets
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
 
 # ── Setup ──────────────────────────────────────────────────────────────────────
-install: ## Create .venv (if needed) and install training + dev dependencies
+install: ## Create .venv (if needed) and install all dependencies
 	@test -f $(PYTHON) || $(SYSTEM_PYTHON) -m venv $(VENV)
 	$(PIP) install --upgrade pip
-	$(PIP) install -r training/requirements.txt
+	$(PIP) install -r training/requirements.txt -r requirements-dev.txt
 	$(PIP) install pre-commit black==24.4.2 flake8==7.1.0 flake8-pyproject
 
 hooks: ## Install pre-commit hooks (run once after clone)
@@ -53,6 +53,9 @@ train: ## Train model and register to MLflow (requires: make up first)
 		if [ "$$i" = "10" ]; then echo "Error: MLflow not reachable after 30s. Is 'make up' running?"; exit 1; fi; \
 	done
 	MLFLOW_TRACKING_URI=http://localhost:5000 $(PYTHON) training/train.py
+
+test: ## Run the test suite
+	$(PYTHON) -m pytest tests/ -v
 
 drift: ## Run drift detection report against local stack
 	MLFLOW_TRACKING_URI=http://localhost:5000 \

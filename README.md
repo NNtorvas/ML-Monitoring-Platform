@@ -4,7 +4,7 @@ A production-grade MLOps pipeline demonstrating the full model lifecycle: traini
 
 ---
 
-## What This Proves
+## Capabilities
 
 | Concern | How It's Addressed |
 |---|---|
@@ -123,6 +123,8 @@ curl -X POST http://localhost:8000/predict \
 - `MLFLOW_TRACKING_URI` — public URL of your MLflow instance
 - `POSTGRES_HOST`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
 
+**CI** (`ci.yml`): runs on every push and pull request. Installs all dependencies and runs the test suite (`pytest tests/ -v`).
+
 **CD pipeline** (`cd.yml`): triggers on every push to `main`. Validates that `__version__.py` was bumped, creates an annotated git tag, then builds and pushes the `api` and `dashboard` Docker images to GHCR in parallel.
 
 **Drift & retrain** (`drift_retrain.yml`): runs daily at 06:00 UTC. If drift is detected, retrains and registers a new model version. Trigger manually via **Actions → Drift Check & Auto-Retrain → Run workflow**.
@@ -139,6 +141,7 @@ make help       # list all available commands
 make format     # auto-format all Python with Black
 make lint       # run Flake8
 make check      # check formatting + linting (same gates as CI)
+make test       # run the test suite (no Docker required)
 
 make up         # start all services
 make down       # stop all services

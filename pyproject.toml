@@ -1,3 +1,8 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["ignore::DeprecationWarning"]
+
 [tool.black]
 line-length = 110
 skip_string_normalization = true
