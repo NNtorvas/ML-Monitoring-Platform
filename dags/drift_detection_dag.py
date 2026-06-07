@@ -36,9 +36,10 @@ with DAG(
     dag_id="drift_detection",
     default_args=default_args,
     description="Daily data drift check using Evidently",
-    schedule="@daily",
+    schedule=None,  # disabled — mock project, enable by setting schedule="@daily"
     start_date=datetime(2024, 1, 1),
     catchup=False,
+    is_paused_upon_creation=True,
     tags=["monitoring", "drift"],
 ) as dag:
 
